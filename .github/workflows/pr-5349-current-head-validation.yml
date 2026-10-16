@@ -1,0 +1,88 @@
+name: PR 5349 Zero-Skips Validation
+on:
+  push:
+    branches:
+      - ci/pr-5349-zero-skips-validation-20261017
+permissions:
+  contents: read
+jobs:
+  formatting:
+    name: autofix.ci equivalent - verify formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.4.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run upstream Biome formatter without modifying PR
+        run: |
+          pnpm exec biome format --write
+          git diff --exit-code
+  pr-check:
+    name: Pull Request equivalent - ${{ matrix.job }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        job: [build, test, typecheck]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.4.0
+          cache: pnpm
+      - name: Install Nixpacks
+        if: matrix.job == 'test'
+        run: |
+          export NIXPACKS_VERSION=1.41.0
+          curl -sSL https://nixpacks.com/install.sh | bash
+      - name: Install Railpack
+        if: matrix.job == 'test'
+        run: |
+          export RAILPACK_VERSION=0.15.4
+          curl -sSL https://railpack.com/install.sh | bash
+      - name: Add build tools to PATH
+        if: matrix.job == 'test'
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install rclone for SFTP integration tests
+        if: matrix.job == 'test'
+        run: |
+          curl -sSL -o /tmp/rclone.zip https://github.com/rclone/rclone/releases/download/v1.75.1/rclone-v1.75.1-linux-amd64.zip
+          unzip -o /tmp/rclone.zip -d /tmp
+          sudo mv /tmp/rclone-v1.75.1-linux-amd64/rclone /usr/local/bin/rclone
+          rclone version
+      - name: Initialize Docker Swarm
+        if: matrix.job == 'test'
+        run: |
+          docker swarm init
+          docker network create --driver overlay dokploy-network || true
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm server:build
+      - run: pnpm ${{ matrix.job }}
+
+  scheduler-rclone-runtime:
+    name: Scheduler rclone binary + obscure smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Test PR Dockerfile.schedule rclone instructions in actual Node base
+        run: |
+          set -euo pipefail
+          grep -Fq 'COPY --from=rclone/rclone:1.75.1 /usr/local/bin/rclone /usr/local/bin/rclone' Dockerfile.schedule
+          grep -Fq 'RUN rclone version && test -n' Dockerfile.schedule
+          {
+            echo 'FROM node:24.4.0-slim'
+            grep -F 'COPY --from=rclone/rclone:1.75.1 /usr/local/bin/rclone /usr/local/bin/rclone' Dockerfile.schedule
+            grep -F 'RUN rclone version && test -n' Dockerfile.schedule
+          } | docker build -t dokploy-scheduler-rclone-smoke:pr5349 -
+          docker run --rm --entrypoint sh dokploy-scheduler-rclone-smoke:pr5349 -c 'rclone version && test -n "$(printf "%s" scheduler-smoke | rclone obscure -)"'

@@ -2,7 +2,7 @@ name: PR 5349 Current-Head Validation
 on:
   push:
     branches:
-      - ci/pr-5349-validation-20261017
+      - ci/pr-5349-railpack-skip-investigation
 permissions:
   contents: read
 jobs:

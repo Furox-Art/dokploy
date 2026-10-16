@@ -275,8 +275,8 @@ describe(
 			REAL_TEST_TIMEOUT,
 		);
 
-		it.skip(
-			"should REALLY build with railpack (SKIPPED: requires special permissions)",
+		it(
+			"should REALLY build with railpack",
 			async () => {
 				const railpackAppName = `real-railpack-${Date.now()}`;
 				const railpackApp = createMockApplication({

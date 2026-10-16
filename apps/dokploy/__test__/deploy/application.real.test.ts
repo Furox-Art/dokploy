@@ -282,7 +282,7 @@ describe(
 				const railpackApp = createMockApplication({
 					appName: railpackAppName,
 					buildType: "railpack",
-					railpackVersion: "3",
+					railpackVersion: "0.15.4",
 				});
 				currentAppName = railpackAppName;
 				allTestAppNames.push(railpackAppName);

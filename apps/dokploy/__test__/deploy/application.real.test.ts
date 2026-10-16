@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { ApplicationNested } from "@dokploy/server";
 import { paths } from "@dokploy/server/constants";
@@ -296,11 +296,20 @@ describe(
 
 				console.log(`\n🚀 Testing real railpack deployment: ${currentAppName}`);
 
-				const result = await deployApplication({
-					applicationId: "test-app-id",
-					titleLog: "Real Railpack Test",
-					descriptionLog: "",
-				});
+				let result: boolean;
+				try {
+					result = await deployApplication({
+						applicationId: "test-app-id",
+						titleLog: "Real Railpack Test",
+						descriptionLog: "",
+					});
+				} catch (error) {
+					if (existsSync(currentDeployment.logPath)) {
+						const output = readFileSync(currentDeployment.logPath, "utf8");
+						console.error("Railpack deployment log tail:", output.slice(-12000));
+					}
+					throw error;
+				}
 
 				expect(result).toBe(true);
 
